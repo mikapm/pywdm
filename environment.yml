@@ -1,0 +1,29 @@
+name: wdm
+channels:
+  - conda-forge
+dependencies:
+  - python=3.9.14
+  - ipython
+  - pip
+  - ipympl
+  - openpyxl
+  - jupyter
+  - numpy
+  - numba=0.56.4
+  - scipy
+  - pandas
+  - xarray
+  - pint-xarray
+  - pint
+  - statsmodels
+  - matplotlib
+  - cmocean
+  - scikit-learn
+  - scikit-image
+  - nbconvert
+  - cftime
+  - cf_xarray
+  - astropy
+  - netcdf4
+  - h5netcdf
+  - tqdm
