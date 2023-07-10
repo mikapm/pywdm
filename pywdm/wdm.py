@@ -199,9 +199,9 @@ class WaveletDirectionalMethod():
 #         freqs = oct2freq(self.omin, self.omax, self.ns) # Gives different result from MD
         k = 0 # Counter
         freqs = [] # List for frequencies
-        for i in np.arange(wdm.omin, wdm.omax+1):
-            for j in range(wdm.nv):
-                freqs.append(2**(i+j/wdm.nv))
+        for i in np.arange(self.omin, self.omax+1):
+            for j in range(self.nv):
+                freqs.append(2**(i+j/self.nv))
         freqs = np.array(freqs)
         
         #  Compute wavelet coeffs, amplitudes and phase angles for each wave staff
@@ -333,7 +333,7 @@ class WaveletDirectionalMethod():
         nd = int(360/res)
         
         # Calculate frequencies for normalizing (df) and initialize spectrum array Efd
-        df = freqs * np.log(2) / wdm.nv # For normalizing the spectrum
+        df = freqs * np.log(2) / self.nv # For normalizing the spectrum
         Efd = np.zeros((nf, nd)) # Spectrum array
         dth = res * np.pi/180 # Directional resolution in radians
         C = 1.03565; # This corrects for the non-orthogonality of the Morlet wavelets?
