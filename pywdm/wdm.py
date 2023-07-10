@@ -224,7 +224,7 @@ class WaveletDirectionalMethod():
     def wdm_kth(self, arr):
         """
         Main WDM function for determining wavelet amplitude Amp, frequencies freqs,
-        and wavenumber vector components K, Th from wave staff array arr using the
+        and wavenumber vector components K, Th (rad) from wave staff array arr using the
         WDM method of Donelan et al. (1996).
         
         Input array arr of wave staffs must be of shape (ntime, nstaffs).
@@ -343,7 +343,7 @@ class WaveletDirectionalMethod():
         for n in range(nf):
             for ct, d in enumerate(dirs):
                 # Find array indices corresponding to directional bin
-                ii = np.where(np.logical_and(Th[n,:]>d, Th[n,:]<(d+res)))
+                ii = np.where(np.logical_and(Th[n,:]>=d, Th[n,:]<(d+res)))
                 # Amp has units m, and Efd will have units of m^2
                 # Normalization according to code by Donelan
                 Efd[n,ct] = np.sum(Amp[n,ii]**2) / self.nv * C / nt
