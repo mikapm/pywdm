@@ -25,5 +25,6 @@ dependencies:
   - cf_xarray
   - astropy
   - netcdf4
+  - bottleneck
   - h5netcdf
   - tqdm
