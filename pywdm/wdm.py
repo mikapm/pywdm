@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 
 # Imports
-import os
-import glob
 import numpy as np
 import pandas as pd
 import xarray as xr
-import matplotlib.pyplot as plt
+
 
 # ************************************************************************
 # General Wavelet Transform functions
@@ -17,6 +15,7 @@ def oct2freq(omin, omax, nv):
     Based on getfreqs() by Daniel Santiago (https://github.com/dspelaez/wdm).
     """
     return 2.**np.linspace(omin, omax, nv * abs(omin-omax) + 1)
+
 
 def morlet(s, nt, fs):
     """
@@ -29,6 +28,7 @@ def morlet(s, nt, fs):
     """
     nu  = s * fs * np.arange(1, nt/2+1) / nt
     return np.exp(-1./np.sqrt(2) * ((nu - 1)/0.220636)**2.)
+
 
 def wavelet(z, freqs, fs):
     """
@@ -58,6 +58,7 @@ def wavelet(z, freqs, fs):
     # and transformed time series
     return np.fft.ifft(2. * fft[None,:] * win, nt)
 
+
 def dirs_nautical(dtheta=10, recip=False):
     """
     Make directional array in Nautical convention (compass dir from).
@@ -76,6 +77,37 @@ def dirs_nautical(dtheta=10, recip=False):
         theta[eastdirs] += 180
 
     return theta
+
+
+def mspr(spec_xr, key='Efth', norm=False, fmin=None, fmax=None):
+    """
+    Mean directional spread following Kuik (1988), 
+    coded by Jan Victor Björkqvist
+
+    Use norm=True with model data (eg WW3) (?)
+    """
+    theta = np.deg2rad(spec_xr.direction.values)
+    dD = 360 / len(theta)
+    if norm:
+        # Normalizing here so that integration over direction becomes summing
+        efth = spec_xr[key] * dD * np.pi/180
+    else:
+        efth = spec_xr[key]
+    ef = efth.sum(dim='direction')  # Omnidirection spectra
+    eth = efth.integrate(coord='freq')  # Directional distribution
+    m0 = ef.sel(freq=slice(fmin, fmax)).integrate(coord='freq').item()
+    # Function of frequency:
+    c1 = ((np.cos(theta) * efth).sel(freq=slice(fmin, fmax)).sum(dim='direction'))  
+    s1 = ((np.sin(theta) * efth).sel(freq=slice(fmin, fmax)).sum(dim='direction'))
+    a1m = c1.integrate(coord='freq').values / m0  # Mean parameters
+    b1m = s1.integrate(coord='freq').values / m0
+    thetam = np.arctan2(b1m, a1m)
+    m1 = np.sqrt(b1m**2 + a1m**2)
+    # Mean directional spread
+    sprm = (np.sqrt(2 - 2*(m1)) * 180/np.pi).item()
+    # Mean wave direction
+    dirm = (np.mod(thetam * 180/np.pi, 360)).item()
+    return sprm, dirm 
 
 
 # ***************************************************************************
@@ -344,7 +376,7 @@ class WaveletDirectionalMethod():
         return Amp, K.squeeze(), Th.squeeze(), freqs
     
     
-    def spec_fth(self, Amp, Th, freqs, res=10):
+    def spec_fth(self, Amp, Th, freqs, res=10, fmin=0.05, fmax=0.5):
         """
         Get frequency-direction (f-theta) spectrum from WDM analysis following MD's
         function direction_frequency.m
@@ -354,6 +386,10 @@ class WaveletDirectionalMethod():
             Th - wavelet directions in degrees (nf x nt)
             freqs - wavelet frequencies (nf)
             res - int; directional resolution in deg
+            fmin - float; min. frequency for integrated parameters.
+            fmax - float; max. frequency for integrated parameters.
+        Returns:
+            ds - xr.Dataset with f-theta spectrum and selected integrated params
         """
         # Number of frequencies and timesteps and directions
         nf, nt = Th.shape
@@ -382,18 +418,6 @@ class WaveletDirectionalMethod():
         # Frequency spectrum w/ units m^2/Hz
         S = np.sum(Efd, axis=1) * dth 
 
-#         # Make directional distribution; convert to geographic coordinate frame
-#         ndirec = np.abs(dirs - 360)
-#         # Convert from direction towards to direction from
-#         ndirec += 180
-#         ia = np.where(ndirec >= 360)[0]
-#         ndirec[ia] -= 360
-#         # Create new energy and distribution matrices that go from 0-360.
-#         NE = np.zeros_like(Efd)
-#         for ii in range(nd):
-#             ia = np.where(ndirec==dirs[ii])[0]
-#             if len(ia) > 0:
-#                 NE[:, ii] = Efd[:, ia.item()]
         # Convert directions to nautical convention (compass dir FROM)
         theta = dirs_nautical(dtheta=res, recip=False)  
 
@@ -409,10 +433,17 @@ class WaveletDirectionalMethod():
                         coords={'freq': (['freq'], freqs),
                                 'direction': (['direction'], theta)},
                        )
+        # Compute Hs & fp and save to dataset
+        Hm0 = 4 * np.sqrt(ds.Efth.sel(freq=slice(fmin, fmax)).integrate(
+            coord=['direction', 'freq'])).item() # Hs from m0
+        ds['Hm0'] = ([], Hm0)
+        S = ds.Efth.integrate(coord='direction') # scalar freq. spectrum
+        fp = S.freq.values[S.values == S.values.max()].item() # peak freq
+        ds['fp'] = ([], fp)
         # Compute mean direction and directional spread and save to dataset
-#         dspr, mdir = mspr(ds, key='Efth', fmin=fmin, fmax=fmax)
-#         ds['mdir'] = ([], mdir)
-#         ds['dspr'] = ([], dspr)
+        dspr, mdir = mspr(ds, key='Efth', fmin=fmin, fmax=fmax)
+        ds['mdir'] = ([], mdir)
+        ds['dspr'] = ([], dspr)
 
         
         return ds
