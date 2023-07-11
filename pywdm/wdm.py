@@ -376,7 +376,7 @@ class WaveletDirectionalMethod():
         return Amp, K.squeeze(), Th.squeeze(), freqs
     
     
-    def spec_fth(self, Amp, Th, freqs, res=10, fmin=0.05, fmax=0.5):
+    def spec_fth(self, Amp, Th, freqs, res=10, fmin=0.05, fmax=0.5, ang_offset=0):
         """
         Get frequency-direction (f-theta) spectrum from WDM analysis following MD's
         function direction_frequency.m
@@ -388,6 +388,9 @@ class WaveletDirectionalMethod():
             res - int; directional resolution in deg
             fmin - float; min. frequency for integrated parameters.
             fmax - float; max. frequency for integrated parameters.
+            ang_offset - scalar; degrees to subtract from directions
+                         to account for array orientation relativel to
+                         North. E.g. for EKOK, ang_offset=21.
         Returns:
             ds - xr.Dataset with f-theta spectrum and selected integrated params
         """
@@ -421,9 +424,11 @@ class WaveletDirectionalMethod():
         # Convert directions to nautical convention (compass dir FROM)
         theta = dirs_nautical(dtheta=res, recip=False)  
 
+        # Subtract ang_offset degrees to account for platform orientation
+        theta = (theta - ang_offset) % 360
+
         # Sort spectrum according to new directions
         dsort = np.argsort(theta)
-        # NE = NE[:, dsort] * np.pi/180
         NE = Efd[:, dsort] * np.pi/180
         theta = np.sort(theta)
 
