@@ -5,6 +5,7 @@ import os
 import glob
 import numpy as np
 import pandas as pd
+import xarray as xr
 import matplotlib.pyplot as plt
 
 # ************************************************************************
@@ -56,7 +57,26 @@ def wavelet(z, freqs, fs):
     # Compute wavelet coefficients (shape:[nf, nt]) by convolving the window 
     # and transformed time series
     return np.fft.ifft(2. * fft[None,:] * win, nt)
-    
+
+def dirs_nautical(dtheta=10, recip=False):
+    """
+    Make directional array in Nautical convention (compass dir from).
+    """
+    # Convert directions to nautical convention (compass dir FROM)
+    # Start with cartesian (a1 is positive east velocities, b1 is positive north)
+    theta = -np.arange(-180, 180, dtheta)  
+    # Rotate, flip and sort
+    theta += 90
+    theta[theta < 0] += 360
+    if recip:
+        westdirs = (theta > 180)
+        eastdirs = (theta < 180)
+        # Take reciprocals such that wave direction is FROM, not TOWARDS
+        theta[westdirs] -= 180
+        theta[eastdirs] += 180
+
+    return theta
+
 
 # ***************************************************************************
 
@@ -229,8 +249,15 @@ class WaveletDirectionalMethod():
         
         Input array arr of wave staffs must be of shape (ntime, nstaffs).
         """
+        # Make sure input array is even
+        if (np.array(arr).shape[1] % 2) == 0:
+            # Even - only copy array
+            arrc = arr.copy()
+        else:
+            # Remove last values to make even
+            arrc = arr[:, :-1].copy()
         # Wavelet transform of wave staffs
-        W, Amp, phi, freqs = self.wavelet_arr(arr)
+        W, Amp, phi, freqs = self.wavelet_arr(arrc)
         
         # Separation vectors and coeffs for eqs 8 and 9 in D1996
         r, a = self.separation_vectors()
@@ -239,7 +266,7 @@ class WaveletDirectionalMethod():
         
         # Iterate over WT frequencies, compute wavenumbers k and directions th
         nf = len(freqs) # Number of WT frequencies
-        nt = max(arr.shape) # Length of time series in array
+        nt = max(arrc.shape) # Length of time series in array
         Dphi = np.zeros((nf, nt, self.npairs)) # All phase differences b/w pairs
         K = np.zeros((nf, nt, npairs_to_use)) # Wavenumbers
         Th = np.zeros_like(K) # Directions
@@ -317,7 +344,7 @@ class WaveletDirectionalMethod():
         return Amp, K.squeeze(), Th.squeeze(), freqs
     
     
-    def spec_fth(self, Amp, Th, freqs, res=1):
+    def spec_fth(self, Amp, Th, freqs, res=10):
         """
         Get frequency-direction (f-theta) spectrum from WDM analysis following MD's
         function direction_frequency.m
@@ -336,10 +363,10 @@ class WaveletDirectionalMethod():
         df = freqs * np.log(2) / self.nv # For normalizing the spectrum
         Efd = np.zeros((nf, nd)) # Spectrum array
         dth = res * np.pi/180 # Directional resolution in radians
-        C = 1.03565; # This corrects for the non-orthogonality of the Morlet wavelets?
+        C = 1.03565; # This corrects for the non-orthogonality of the Morlet wavelets(?)
         
         # Populate spectrum
-        dirs = np.arange(0, 360, int(res))
+        dirs = np.arange(-180, 180, int(res))
         for n in range(nf):
             for ct, d in enumerate(dirs):
                 # Find array indices corresponding to directional bin
@@ -354,7 +381,43 @@ class WaveletDirectionalMethod():
         Efd /= (df.reshape([-1, 1]) * np.ones(nd))
         # Frequency spectrum w/ units m^2/Hz
         S = np.sum(Efd, axis=1) * dth 
+
+#         # Make directional distribution; convert to geographic coordinate frame
+#         ndirec = np.abs(dirs - 360)
+#         # Convert from direction towards to direction from
+#         ndirec += 180
+#         ia = np.where(ndirec >= 360)[0]
+#         ndirec[ia] -= 360
+#         # Create new energy and distribution matrices that go from 0-360.
+#         NE = np.zeros_like(Efd)
+#         for ii in range(nd):
+#             ia = np.where(ndirec==dirs[ii])[0]
+#             if len(ia) > 0:
+#                 NE[:, ii] = Efd[:, ia.item()]
+        # Convert directions to nautical convention (compass dir FROM)
+        theta = dirs_nautical(dtheta=res, recip=False)  
+
+        # Sort spectrum according to new directions
+        dsort = np.argsort(theta)
+        # NE = NE[:, dsort] * np.pi/180
+        NE = Efd[:, dsort] * np.pi/180
+        theta = np.sort(theta)
+
+        # Save output to xr.Dataset
+        data_vars={'Efth': (['freq', 'direction'], NE),}
+        ds = xr.Dataset(data_vars=data_vars, 
+                        coords={'freq': (['freq'], freqs),
+                                'direction': (['direction'], theta)},
+                       )
+        # Compute mean direction and directional spread and save to dataset
+#         dspr, mdir = mspr(ds, key='Efth', fmin=fmin, fmax=fmax)
+#         ds['mdir'] = ([], mdir)
+#         ds['dspr'] = ([], dspr)
+
         
-        return Efd, S
+        return ds
+
+
+
 
 
