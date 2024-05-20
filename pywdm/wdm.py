@@ -2,7 +2,6 @@
 
 # Imports
 import numpy as np
-import pandas as pd
 import xarray as xr
 
 
@@ -376,7 +375,7 @@ class WaveletDirectionalMethod():
         return Amp, K.squeeze(), Th.squeeze(), freqs
     
     
-    def spec_fth(self, Amp, Th, freqs, res=10, fmin=0.05, fmax=0.5, ang_offset=0):
+    def spec_fth(self, Amp, Th, freqs, res=10, fmin=0.05, fmax=0.5, ang_offset=0, local_dir=False):
         """
         Get frequency-direction (f-theta) spectrum from WDM analysis following MD's
         function direction_frequency.m
@@ -391,6 +390,7 @@ class WaveletDirectionalMethod():
             ang_offset - scalar; degrees to subtract from directions
                          to account for array orientation relativel to
                          North. E.g. for EKOK, ang_offset=21.
+            local_dir - bool; if False, convert directions to Nautical
         Returns:
             ds - xr.Dataset with f-theta spectrum and selected integrated params
         """
@@ -421,16 +421,18 @@ class WaveletDirectionalMethod():
         # Frequency spectrum w/ units m^2/Hz
         S = np.sum(Efd, axis=1) * dth 
 
-        # Convert directions to nautical convention (compass dir FROM)
-        theta = dirs_nautical(dtheta=res, recip=False)  
-
-        # Subtract ang_offset degrees to account for platform orientation
-        theta = (theta - ang_offset) % 360
-
-        # Sort spectrum according to new directions
-        dsort = np.argsort(theta)
-        NE = Efd[:, dsort] * np.pi/180
-        theta = np.sort(theta)
+        if not local_dir:
+            # Convert directions to nautical convention (compass dir FROM)
+            theta = dirs_nautical(dtheta=res, recip=False)  
+            # Subtract ang_offset degrees to account for platform orientation
+            theta = (theta - ang_offset) % 360
+            # Sort spectrum according to new directions
+            dsort = np.argsort(theta)
+            NE = Efd[:, dsort] * np.pi/180
+            theta = np.sort(theta)
+        else:
+            theta = dirs.copy()
+            NE = Efd * np.pi/180
 
         # Save output to xr.Dataset
         data_vars={'Efth': (['freq', 'direction'], NE),}
@@ -443,7 +445,7 @@ class WaveletDirectionalMethod():
             coord=['direction', 'freq'])).item() # Hs from m0
         ds['Hm0'] = ([], Hm0)
         S = ds.Efth.integrate(coord='direction') # scalar freq. spectrum
-        fp = S.freq.values[S.values == S.values.max()].item() # peak freq
+        fp = np.atleast_1d(S.freq.values[S.values == S.values.max()]).item() # peak freq
         ds['fp'] = ([], fp)
         # Compute mean direction and directional spread and save to dataset
         dspr, mdir = mspr(ds, key='Efth', fmin=fmin, fmax=fmax)
