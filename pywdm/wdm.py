@@ -422,6 +422,7 @@ class WaveletDirectionalMethod():
         S = np.sum(Efd, axis=1) * dth 
 
         if not local_dir:
+            print('Converting directions to geographical ...')
             # Convert directions to nautical convention (compass dir FROM)
             theta = dirs_nautical(dtheta=res, recip=False)  
             # Subtract ang_offset degrees to account for platform orientation
