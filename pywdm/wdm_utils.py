@@ -6,7 +6,7 @@ from pywdm import wdm
 Functions to apply WDM on various datasets.
 """
 
-def wdm_stereo(eta, xc=-5, yc=-90, sidelen=10, fs=5, local=True):
+def wdm_stereo(eta, xc=-5, yc=-90, sidelen=10, fs=5, dirres=10, local=True):
     """
     Get WDM directional wave spectrum from virtual array of wave staffs
     in stereo video grid within xr.Dataset 'ds'.
@@ -14,7 +14,7 @@ def wdm_stereo(eta, xc=-5, yc=-90, sidelen=10, fs=5, local=True):
     Parameters:
         ds - xr.DataArray; space-time stereo grid
         xc - scalar; array origin x coordinate
-        yc - scalar; array origin y coordinate
+        yc - scalar; array origin y coordinate (negative for Ekofisk)
         sidelen - scalar; array half side length in m
         fs - scalar; sampling frequency in Hz
         local - bool; if True, uses local x,y coordinate system
@@ -27,7 +27,8 @@ def wdm_stereo(eta, xc=-5, yc=-90, sidelen=10, fs=5, local=True):
     origin = (xc, yc) # x,y coordinates of array origin
     # x,y coordinates of square array for WDM
     xpts = [origin[0]+sidelen, origin[0], origin[0]-sidelen, origin[0]]
-    ypts = [origin[1], origin[1]+sidelen, origin[1], origin[1]-sidelen]
+    # ypts = [origin[1], origin[1]+sidelen, origin[1], origin[1]-sidelen]
+    ypts = [origin[1], origin[1]-sidelen, origin[1], origin[1]+sidelen]
     # Define A and R arrays for stereo array
     a_p1 = 0 # Angle from origin to p1 
     a_p2 = 90
@@ -73,10 +74,9 @@ def wdm_stereo(eta, xc=-5, yc=-90, sidelen=10, fs=5, local=True):
                              },
                      )
     # Get f-theta spectrum (local coordinate system)
-    res = 10 # Dir. resolution
     if not local:
-        dse = WDM.spec_fth(Amp, Th*(180/np.pi), freqs, res=res, local_dir=False)
+        dse = WDM.spec_fth(Amp, Th*(180/np.pi), freqs, res=dirres, local_dir=False, ang_offset=21)
     else:
-        dse = WDM.spec_fth(Amp, Th*(180/np.pi), freqs, res=res, local_dir=True, ang_offset=21)
+        dse = WDM.spec_fth(Amp, Th*(180/np.pi), freqs, res=dirres, local_dir=True)
     
     return dse, dsw
